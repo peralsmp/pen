@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pen AI - Academic Assistant</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="app-layout">
+        <!-- History Side Menu -->
+        <aside id="history-menu">
+            <div class="history-header">
+                <h2>Chat History</h2>
+                <button id="new-chat-btn" title="Start a new chat">New Chat</button>
+            </div>
+            <div id="history-list">
+                <!-- History items will be populated by JS -->
+            </div>
+        </aside>
+
+        <!-- Main Chat Container -->
+        <div class="chat-container">
+            <header class="chat-header">
+                <button id="menu-toggle-btn" title="Toggle history menu">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 6.75A.75.75 0 013.75 6h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 6.75zM3 12a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 12zm0 5.25a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75a.75.75 0 01-.75-.75z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <h1>Pen AI <span class="header-subtitle">Academic Assistant</span></h1>
+            </header>
+
+            <main id="chat-window" class="chat-window">
+                <!-- Messages will be added here by JavaScript -->
+            </main>
+
+            <footer class="chat-footer">
+                <!-- NEW: Quick Start Buttons -->
+                <div id="quick-start-buttons">
+                    <button id="math-btn">🧮 Math Solver</button>
+                    <button id="eng-btn">✍️ English Tutor</button>
+                    <button id="bangla-btn">🇧🇩 Bangla Helper</button>
+                </div>
+                <form id="chat-form" class="chat-form">
+                    <input type="text" id="message-input" placeholder="Ask a math problem, or practice English..." autocomplete="off" required>
+                    <button type="submit" id="send-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+                        </svg>                      
+                    </button>
+                </form>
+            </footer>
+        </div>
+    </div>
+    
+    <div id="menu-overlay" class="hidden"></div>
+
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
