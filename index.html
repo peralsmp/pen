@@ -7,56 +7,115 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖊️</text></svg>">
 </head>
 <body>
 
-    <div id="app-layout">
+    <!-- NEW: Landing Page -->
+    <div id="landing-page">
+        <div class="parallax-bg">
+            <div class="parallax-shape shape1" data-speed="-0.5"></div>
+            <div class="parallax-shape shape2" data-speed="0.8"></div>
+            <div class="parallax-shape shape3" data-speed="-0.3"></div>
+            <div class="parallax-shape shape4" data-speed="0.4"></div>
+        </div>
+        <header class="landing-header">
+            <h1>Pen AI</h1>
+        </header>
+        <main class="landing-content">
+            <div class="hero-section">
+                <h2>The Smart, Friendly Way to Learn.</h2>
+                <p>Stuck on a problem? Need to practice your English? Pen AI is your personal academic assistant, ready to help you understand, not just answer.</p>
+                <button id="start-app-btn">Start Learning Now →</button>
+            </div>
+            <div class="features-section">
+                <div class="feature-card">
+                    <h3>🧮 Math Solver</h3>
+                    <p>Step-by-step solutions to help you grasp core concepts.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>✍️ English Tutor</h3>
+                    <p>Improve grammar, vocabulary, and writing skills with a patient guide.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🇧🇩 Bangla Helper</h3>
+                    <p>Assistance with translation, grammar, and language nuances.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📚 Study Buddy</h3>
+                    <p>Practice any subject with a friendly AI that adapts to your learning style.</p>
+                </div>
+            <div class="feature-card">
+                    <h3>🔒 Privacy First</h3>
+                    <p>Your conversations are private and secure. We respect your data.</p>
+            </div>
+                <div class="feature-card">
+                    <h3>🌐 Multi-Platform</h3>
+                    <p>Available on web, mobile, and desktop. Learn anytime, anywhere.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Main Application (Initially Hidden) -->
+    <div id="app-layout" style="display: none;">
         <!-- History Side Menu -->
         <aside id="history-menu">
             <div class="history-header">
-                <h2>Chat History</h2>
-                <button id="new-chat-btn" title="Start a new chat">New Chat</button>
+                <!-- NEW: Home Button -->
+                <button id="home-btn" title="Go to Home Page">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    <span>Home</span>
+                </button>
+                <button id="new-chat-btn" title="Start a new chat">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l0 14"></path><path d="M5 12l14 0"></path></svg>
+                    <span>New Chat</span>
+                </button>
             </div>
-            <div id="history-list">
-                <!-- History items will be populated by JS -->
-            </div>
+            <div id="history-list"><!-- Populated by JS --></div>
         </aside>
 
         <!-- Main Chat Container -->
         <div class="chat-container">
             <header class="chat-header">
                 <button id="menu-toggle-btn" title="Toggle history menu">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path fill-rule="evenodd" d="M3 6.75A.75.75 0 013.75 6h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 6.75zM3 12a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 12zm0 5.25a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75a.75.75 0 01-.75-.75z" clip-rule="evenodd" />
-                    </svg>
+                    <span></span>
+                    <span></span>
+                    <span></span>
                 </button>
-                <h1>Pen AI <span class="header-subtitle">Academic Assistant</span></h1>
+                <!-- UPDATED: Made logo clickable -->
+                <button id="go-home-logo-btn" class="header-title-container">
+                    <h1>Pen AI</h1>
+                    <span class="header-subtitle">Your Academic Assistant</span>
+                </button>
+                <button id="theme-toggle-btn" title="Toggle Theme"></button>
             </header>
 
-            <main id="chat-window" class="chat-window">
-                <!-- Messages will be added here by JavaScript -->
-            </main>
+            <main id="chat-window" class="chat-window"></main>
 
             <footer class="chat-footer">
-                <!-- NEW: Quick Start Buttons -->
-                <div id="quick-start-buttons">
-                    <button id="math-btn">🧮 Math Solver</button>
-                    <button id="eng-btn">✍️ English Tutor</button>
-                    <button id="bangla-btn">🇧🇩 Bangla Helper</button>
-                </div>
+                <button id="stop-generating-btn" class="hidden">
+                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20" height="20"><path d="M5.25 3A2.25 2.25 0 003 5.25v9.5A2.25 2.25 0 005.25 17h9.5A2.25 2.25 0 0017 14.75v-9.5A2.25 2.25 0 0014.75 3h-9.5z"></path></svg>
+                    Stop Generating
+                </button>
                 <form id="chat-form" class="chat-form">
-                    <input type="text" id="message-input" placeholder="Ask a math problem, or practice English..." autocomplete="off" required>
-                    <button type="submit" id="send-button">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-                        </svg>                      
+                    <div class="textarea-wrapper">
+                        <textarea id="message-input" placeholder="Ask to solve 2x+5=15, or practice English..." required rows="1"></textarea>
+                    </div>
+                    <button type="submit" id="send-button" title="Send Message">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
                     </button>
                 </form>
             </footer>
         </div>
     </div>
     
+    <button id="scroll-to-bottom-btn" class="hidden" title="Scroll to bottom">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
+            <path fill-rule="evenodd" d="M10 15a.75.75 0 01-.75-.75V6.56l-1.97 1.97a.75.75 0 11-1.06-1.06l3.25-3.25a.75.75 0 011.06 0l3.25 3.25a.75.75 0 11-1.06 1.06L10.75 6.56V14.25A.75.75 0 0110 15z" clip-rule="evenodd" transform="rotate(180 10 10)" />
+        </svg>
+    </button>
     <div id="menu-overlay" class="hidden"></div>
 
     <!-- Libraries -->
