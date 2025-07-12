@@ -3,89 +3,170 @@
 //
 console.warn("DANGER: API Key is exposed in this client-side code. For development only.");
 
-// --- Your API Key Here ---
+// --- Configuration ---
 const API_KEY = "AIzaSyB_dOIjvqaZmXh9bQqAf7UWYvyghHUMSeg"; // <-- PASTE YOUR NEW KEY HERE
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`;
 const HISTORY_STORAGE_KEY = 'pen-ai-academic-history';
+const THEME_STORAGE_KEY = 'pen-ai-theme';
+const VISITED_STORAGE_KEY = 'pen-ai-has-visited';
 
 // --- AI Persona (System Prompt) ---
 const systemInstruction = {
-    role: 'user', // We send this as a 'user' message to instruct the 'model'
+    role: 'user',
     parts: [{
         text: `You are 'Pen AI', a friendly and encouraging academic assistant designed to help students. Your primary goal is to help students learn, not just give them the final answer.
         - For math problems, you must always show the step-by-step solution and explain the core concepts and formulas used.
         - For English questions, act as a language tutor. Correct grammar, explain vocabulary, suggest improvements for writing, and be encouraging.
         - For Bangla questions, assist with translation, grammar, and understanding the language. When appropriate, use both Bangla script and romanized 'Banglish' to help the student learn.
-        - Always be patient and break down complex topics into simple, easy-to-understand parts. Your tone should be supportive and educational.`
+        - Always be patient and break down complex topics into simple, easy-to-understand parts. Your tone should be supportive and educational.
+        - Use Markdown for formatting, especially for code blocks, lists, and bolding key terms.`
     }]
 };
 
 // --- DOM Element References ---
+const landingPage = document.getElementById('landing-page');
+const startAppBtn = document.getElementById('start-app-btn');
+const parallaxShapes = document.querySelectorAll('.parallax-shape');
 const appLayout = document.getElementById('app-layout');
 const menuToggleBtn = document.getElementById('menu-toggle-btn');
 const historyList = document.getElementById('history-list');
 const newChatBtn = document.getElementById('new-chat-btn');
+const homeBtn = document.getElementById('home-btn');
+const goHomeLogoBtn = document.getElementById('go-home-logo-btn');
 const chatWindow = document.getElementById("chat-window");
 const chatForm = document.getElementById("chat-form");
 const messageInput = document.getElementById("message-input");
 const sendButton = document.getElementById("send-button");
 const menuOverlay = document.getElementById('menu-overlay');
-const mathBtn = document.getElementById('math-btn');
-const engBtn = document.getElementById('eng-btn');
-const banglaBtn = document.getElementById('bangla-btn');
+const themeToggleBtn = document.getElementById('theme-toggle-btn');
+const scrollToBottomBtn = document.getElementById('scroll-to-bottom-btn');
+const stopGeneratingBtn = document.getElementById('stop-generating-btn');
 
 // --- Application State ---
 let conversationHistory = [];
 let allConversations = {};
 let currentConversationId = null;
+let abortController = null;
+let isAppInitialized = false; // Prevents re-initializing the app logic
 
-//
-// *** FIX: Replaced all minified code with the full, readable functions below. ***
-//
+// --- Icons ---
+const ICONS = {
+    sun: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>`,
+    moon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>`,
+    copy: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3.5A1.5 1.5 0 018.5 2h6A1.5 1.5 0 0116 3.5v10A1.5 1.5 0 0114.5 15h-6A1.5 1.5 0 017 13.5V13h1.5v.5a.5.5 0 00.5.5h6a.5.5 0 00.5-.5v-10a.5.5 0 00-.5-.5h-6a.5.5 0 00-.5.5v.5H7V3.5z" /><path d="M4 6.5A1.5 1.5 0 015.5 5h6A1.5 1.5 0 0113 6.5v10A1.5 1.5 0 0111.5 18h-6A1.5 1.5 0 014 16.5v-10z" /></svg>`,
+    check: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.052-.143z" clip-rule="evenodd" /></svg>`
+};
 
-// --- Main Functions ---
+// --- Page Navigation & Setup ---
 
-/** Toggles the visibility of the history menu, handling mobile overlay */
+/** Handles the parallax scroll effect on the landing page */
+function handleParallaxScroll() {
+    const top = window.pageYOffset;
+    parallaxShapes.forEach(shape => {
+        const speed = parseFloat(shape.dataset.speed);
+        const yPos = -(top * speed);
+        shape.style.transform = `translateY(${yPos}px)`;
+    });
+}
+
+/** Transitions from the landing page to the main chat application */
+function enterApp() {
+    localStorage.setItem(VISITED_STORAGE_KEY, 'true');
+    document.body.classList.remove('landing-page-active');
+    
+    landingPage.classList.add('fade-out');
+    landingPage.addEventListener('transitionend', () => {
+        landingPage.classList.add('hidden');
+        appLayout.style.display = 'flex';
+        // Run the main app logic ONLY if it's the first time
+        if (!isAppInitialized) {
+            runInitialAppLogic();
+            isAppInitialized = true;
+        }
+    }, { once: true });
+}
+
+/** Transitions from the main chat app back to the landing page */
+function goToHome() {
+    appLayout.style.display = 'none';
+    landingPage.classList.remove('hidden', 'fade-out');
+    document.body.classList.add('landing-page-active');
+    window.scrollTo(0, 0); // Reset scroll position
+}
+
+/** Runs the essential logic for the chat app to start. Only called once. */
+function runInitialAppLogic() {
+    if (window.innerWidth > 768) {
+        appLayout.classList.add('menu-open');
+    }
+    loadAllConversations();
+    startNewChat();
+}
+
+/** Sets up ALL event listeners for the entire application, once. */
+function setupEventListeners() {
+    // Landing page listeners
+    startAppBtn.addEventListener('click', enterApp);
+    window.addEventListener('scroll', handleParallaxScroll);
+
+    // Main app listeners
+    homeBtn.addEventListener('click', goToHome);
+    goHomeLogoBtn.addEventListener('click', goToHome);
+    menuToggleBtn.addEventListener('click', toggleMenu);
+    newChatBtn.addEventListener('click', startNewChat);
+    chatForm.addEventListener("submit", handleFormSubmit);
+    menuOverlay.addEventListener('click', toggleMenu);
+    themeToggleBtn.addEventListener('click', toggleTheme);
+    scrollToBottomBtn.addEventListener('click', scrollToBottom);
+    chatWindow.addEventListener('scroll', handleScroll);
+    messageInput.addEventListener('input', handleAutoResize);
+    messageInput.addEventListener('keydown', handleTextareaKeydown);
+    stopGeneratingBtn.addEventListener('click', () => {
+        if (abortController) {
+            abortController.abort();
+        }
+    });
+}
+
+
+// --- Main Application Functions (Unchanged from previous correct version) ---
+// Note: All functions from toggleMenu down to deleteConversation are correct and remain here.
+
 function toggleMenu() {
     const isMobile = window.innerWidth <= 768;
-    if (appLayout.classList.contains('menu-open')) {
-        appLayout.classList.remove('menu-open');
-        if (isMobile) menuOverlay.classList.add('hidden');
-    } else {
-        appLayout.classList.add('menu-open');
-        if (isMobile) menuOverlay.classList.remove('hidden');
+    appLayout.classList.toggle('menu-open');
+    if (isMobile) {
+        menuOverlay.classList.toggle('hidden', !appLayout.classList.contains('menu-open'));
     }
 }
 
-/** Starts a new chat session with the academic persona */
+function showWelcomeScreen() {
+    chatWindow.innerHTML = `<div class="welcome-container"> <h2 style="font-size: 2.5rem;">🖊️</h2> <h2>Welcome to Pen AI</h2> <p>Your friendly academic assistant. How can I help you learn today?</p> <div id="quick-start-buttons"> <button class="quick-start-btn" data-prompt="Solve this and show the steps: 2x + 5 = 15">🧮 Solve a Math Problem</button> <button class="quick-start-btn" data-prompt="Correct this sentence and explain the grammar: 'He go to school yesterday.'">✍️ Practice English</button> <button class="quick-start-btn" data-prompt="Translate to Bangla: 'I love learning new things.'">🇧🇩 Get Bangla Help</button> </div> </div>`;
+    document.querySelectorAll('.quick-start-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            messageInput.value = btn.dataset.prompt;
+            messageInput.focus();
+            handleAutoResize();
+        });
+    });
+}
+
 function startNewChat() {
     currentConversationId = null;
-    // CRITICAL: Every new chat starts with the system instruction
     conversationHistory = [systemInstruction];
-    chatWindow.innerHTML = '';
-    addMessage("assistant", "Welcome! I'm Pen AI, your academic assistant. Try a quick start button or ask me anything about Math, English, or Bangla!");
+    showWelcomeScreen();
+    messageInput.value = '';
     messageInput.focus();
+    handleAutoResize();
     if (window.innerWidth <= 768 && appLayout.classList.contains('menu-open')) {
         toggleMenu();
     }
 }
 
-/** Pre-fills the input for a specific subject */
-function setSubjectPrompt(subject) {
-    const prompts = {
-        math: "Solve this and show the steps: 2x + 5 = 15",
-        english: "Correct this sentence and explain the grammar: 'He go to school yesterday.'",
-        bangla: "Translate to Bangla: 'I love learning new things.'"
-    };
-    messageInput.value = prompts[subject] || '';
-    messageInput.focus();
-}
-
-/** Adds a message to the chat UI, but hides the system prompt */
 function addMessage(role, text) {
-    // Don't show the system instruction in the chat window
-    if (text === systemInstruction.parts[0].text) return;
-
+    if (chatWindow.querySelector('.welcome-container')) {
+        chatWindow.innerHTML = '';
+    }
     const messageContainer = document.createElement("div");
     messageContainer.classList.add("message", `${role}-message`);
     const messageHeader = document.createElement("strong");
@@ -95,74 +176,96 @@ function addMessage(role, text) {
     if (text) {
         messageContent.innerHTML = DOMPurify.sanitize(marked.parse(text));
     }
-    
     messageContainer.appendChild(messageHeader);
     messageContainer.appendChild(messageContent);
+    if (role === 'assistant' && text) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.title = 'Copy text';
+        copyBtn.innerHTML = ICONS.copy;
+        copyBtn.addEventListener('click', () => copyMessageToClipboard(copyBtn, text));
+        messageContainer.appendChild(copyBtn);
+    }
     chatWindow.appendChild(messageContainer);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+    scrollToBottom();
     return messageContent;
 }
 
-/** Shows a typing indicator in an empty assistant message */
+async function handleFormSubmit(event) {
+    event.preventDefault();
+    const userMessage = messageInput.value.trim();
+    if (!userMessage) return;
+    setFormState(true);
+    addMessage("user", userMessage);
+    conversationHistory.push({ role: "user", parts: [{ text: userMessage }] });
+    messageInput.value = "";
+    handleAutoResize();
+    abortController = new AbortController();
+    try {
+        const assistantMessageContent = showTypingIndicator();
+        const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: conversationHistory }), signal: abortController.signal });
+        if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`); }
+        const data = await response.json();
+        assistantMessageContent.parentElement.remove();
+        const assistantResponse = data.candidates[0].content.parts[0].text;
+        conversationHistory.push({ role: "model", parts: [{ text: assistantResponse }] });
+        const newAssistantMessage = addMessage("assistant", "");
+        await typeWriter(newAssistantMessage, assistantResponse);
+        // Add the copy button *after* the text is fully typed.
+        if (newAssistantMessage.parentElement) {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.title = 'Copy text';
+            copyBtn.innerHTML = ICONS.copy;
+            copyBtn.addEventListener('click', () => copyMessageToClipboard(copyBtn, assistantResponse));
+            newAssistantMessage.parentElement.appendChild(copyBtn);
+        }
+        saveCurrentConversation();
+    } catch (error) {
+        if (error.name === 'AbortError') { addMessage("assistant", "Generation stopped."); }
+        else { console.error("Error:", error); addMessage("assistant", `Sorry, an error occurred: ${error.message}`); }
+    } finally {
+        abortController = null;
+        setFormState(false);
+    }
+}
+
+function setFormState(isLoading) {
+    messageInput.disabled = isLoading;
+    sendButton.disabled = isLoading;
+    if (isLoading) {
+        stopGeneratingBtn.classList.remove('hidden');
+        sendButton.innerHTML = `<div class="typing-indicator" style="padding:0; height: 24px;"><span></span><span></span><span></span></div>`;
+    } else {
+        stopGeneratingBtn.classList.add('hidden');
+        sendButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>`;
+    }
+}
+
 function showTypingIndicator() {
+    if (chatWindow.querySelector('.welcome-container')) { chatWindow.innerHTML = ''; }
     const messageContent = addMessage('assistant', '');
     const indicator = document.createElement('div');
     indicator.classList.add('typing-indicator');
     indicator.innerHTML = '<span></span><span></span><span></span>';
     messageContent.appendChild(indicator);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+    scrollToBottom();
     return messageContent;
 }
 
-/** Handles the chat form submission */
-async function handleFormSubmit(event) {
-    event.preventDefault();
-    const userMessage = messageInput.value.trim();
-    if (!userMessage) return;
-
-    setFormState(true);
-    addMessage("user", userMessage);
-    conversationHistory.push({ role: "user", parts: [{ text: userMessage }] });
-    messageInput.value = "";
-    
-    try {
-        const assistantMessageContent = showTypingIndicator();
-        const response = await fetch(API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: conversationHistory }),
-        });
-
-        if (!response.ok) throw new Error((await response.json()).error.message);
-
-        const data = await response.json();
-        assistantMessageContent.innerHTML = ''; // Remove typing indicator
-        const assistantResponse = data.candidates[0].content.parts[0].text;
-        conversationHistory.push({ role: "model", parts: [{ text: assistantResponse }] });
-        
-        await typeWriter(assistantMessageContent, assistantResponse);
-        saveCurrentConversation();
-
-    } catch (error) {
-        console.error("Error:", error);
-        addMessage("assistant", `Sorry, an error occurred: ${error.message}`);
-    } finally {
-        setFormState(false);
-    }
-}
-
-/** Creates a typewriter effect for displaying text */
 function typeWriter(element, text) {
     return new Promise(resolve => {
         let i = 0, currentText = '';
         function type() {
-            if (i < text.length) {
+            if (i < text.length && abortController) { // Check if we should stop
                 currentText += text.charAt(i);
                 element.innerHTML = DOMPurify.sanitize(marked.parse(currentText));
-                chatWindow.scrollTop = chatWindow.scrollHeight;
+                scrollToBottom();
                 i++;
-                setTimeout(type, 15);
+                setTimeout(type, 10);
             } else {
+                element.innerHTML = DOMPurify.sanitize(marked.parse(text)); // Ensure full text is rendered
+                scrollToBottom();
                 resolve();
             }
         }
@@ -170,122 +273,81 @@ function typeWriter(element, text) {
     });
 }
 
-/** Enables or disables the chat form */
-function setFormState(isLoading) {
-    messageInput.disabled = isLoading;
-    sendButton.disabled = isLoading;
-    sendButton.innerHTML = isLoading 
-        ? '<div class="typing-indicator" style="padding:0; height: 24px;"><span></span><span></span><span></span></div>'
-        : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>`;
+function handleAutoResize() { messageInput.style.height = 'auto'; messageInput.style.height = `${messageInput.scrollHeight}px`; }
+function handleTextareaKeydown(event) { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); chatForm.requestSubmit(); } }
+function scrollToBottom() { chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' }); }
+function handleScroll() { const isScrolledUp = chatWindow.scrollHeight - chatWindow.scrollTop > chatWindow.clientHeight + 100; scrollToBottomBtn.classList.toggle('visible', isScrolledUp); }
+
+function copyMessageToClipboard(button, text) {
+    navigator.clipboard.writeText(text).then(() => {
+        button.innerHTML = ICONS.check; button.title = "Copied!";
+        setTimeout(() => { button.innerHTML = ICONS.copy; button.title = "Copy text"; }, 2000);
+    }).catch(err => { console.error('Failed to copy text: ', err); button.title = "Copy failed"; });
 }
 
-// --- History Management Functions ---
+function toggleTheme() { document.body.classList.toggle('light-mode'); const newTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark'; localStorage.setItem(THEME_STORAGE_KEY, newTheme); updateThemeIcon(newTheme); }
+function updateThemeIcon(theme) { themeToggleBtn.innerHTML = theme === 'light' ? ICONS.moon : ICONS.sun; }
+function loadTheme() { const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || 'dark'; if (savedTheme === 'light') { document.body.classList.add('light-mode'); } updateThemeIcon(savedTheme); }
 
-/** Loads a specific conversation into the chat window */
 function loadConversation(id) {
-    const conversation = allConversations[id];
-    if (!conversation) return;
-
-    currentConversationId = id;
-    conversationHistory = conversation.history;
-    chatWindow.innerHTML = '';
-    
-    // *** FIX: Explicitly filter out the system instruction when loading a chat. ***
-    conversation.history.forEach(message => {
-        if (message.parts[0].text !== systemInstruction.parts[0].text) {
-             addMessage(message.role === 'model' ? 'assistant' : 'user', message.parts[0].text);
-        }
-    });
-
-    if (window.innerWidth <= 768 && appLayout.classList.contains('menu-open')) {
-        toggleMenu();
-    }
+    const conversation = allConversations[id]; if (!conversation) return;
+    currentConversationId = id; conversationHistory = conversation.history; chatWindow.innerHTML = '';
+    conversation.history.filter(msg => msg.parts[0].text !== systemInstruction.parts[0].text)
+        .forEach(message => { addMessage(message.role === 'model' ? 'assistant' : 'user', message.parts[0].text); });
+    if (window.innerWidth <= 768 && appLayout.classList.contains('menu-open')) { toggleMenu(); }
 }
 
-/** Saves the current conversation to localStorage */
 function saveCurrentConversation() {
-    // Don't save if it's just the initial system prompt
-    if (conversationHistory.length <= 1) return;
-
-    if (!currentConversationId) {
-        currentConversationId = `chat_${Date.now()}`;
-    }
-    
-    // *** FIX: Ensure the title isn't generated from the system prompt. ***
+    if (conversationHistory.length <= 2) return;
+    if (!currentConversationId) { currentConversationId = `chat_${Date.now()}`; }
     const firstUserMessage = conversationHistory.find(m => m.role === 'user' && m.parts[0].text !== systemInstruction.parts[0].text);
-    const title = firstUserMessage ? firstUserMessage.parts[0].text.substring(0, 40) + '...' : 'New Chat';
-
-    allConversations[currentConversationId] = {
-        id: currentConversationId,
-        title: title,
-        history: conversationHistory
-    };
+    const title = firstUserMessage ? firstUserMessage.parts[0].text.substring(0, 30) + (firstUserMessage.parts[0].text.length > 30 ? '...' : '') : 'New Chat';
+    allConversations[currentConversationId] = { id: currentConversationId, title: title, history: conversationHistory };
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(allConversations));
     renderHistoryList();
 }
 
-/** Loads all conversations from localStorage */
-function loadAllConversations() {
-    const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
-    allConversations = saved ? JSON.parse(saved) : {};
-    renderHistoryList();
-}
+function loadAllConversations() { const saved = localStorage.getItem(HISTORY_STORAGE_KEY); allConversations = saved ? JSON.parse(saved) : {}; renderHistoryList(); }
 
-/** Renders the list of saved chats in the history menu */
 function renderHistoryList() {
     historyList.innerHTML = '';
     const sortedIds = Object.keys(allConversations).sort((a, b) => b.localeCompare(a));
-    
-    for (const id of sortedIds) {
+    sortedIds.forEach(id => {
         const conversation = allConversations[id];
-        const item = document.createElement('div');
-        item.classList.add('history-item');
-        item.dataset.id = id;
-        item.innerHTML = `
-            <span class="history-item-title">${DOMPurify.sanitize(conversation.title)}</span>
-            <button class="delete-chat-btn" title="Delete chat">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.58.22-2.365.468a.75.75 0 10.23 1.482l.149-.046a.75.75 0 01.701.043l2.258 1.13A2.25 2.25 0 0010 8.25h.008a2.25 2.25 0 001.992-1.418l2.258-1.13a.75.75 0 01.701-.043l.149.046a.75.75 0 10.23-1.482A41.03 41.03 0 0014 4.193v-.443A2.75 2.75 0 0011.25 1h-2.5zM10 10a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 10zM8.75 15.25a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75z" clip-rule="evenodd" /></svg>
-            </button>
-        `;
+        const item = document.createElement('div'); item.className = 'history-item'; item.dataset.id = id;
+        item.innerHTML = `<span class="history-item-title">${DOMPurify.sanitize(conversation.title)}</span><button class="delete-chat-btn" title="Delete chat"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg></button>`;
         item.querySelector('.history-item-title').addEventListener('click', () => loadConversation(id));
-        item.querySelector('.delete-chat-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteConversation(id);
-        });
+        item.querySelector('.delete-chat-btn').addEventListener('click', (e) => { e.stopPropagation(); deleteConversation(id); });
         historyList.appendChild(item);
-    }
+    });
 }
 
-/** Deletes a conversation from history */
 function deleteConversation(id) {
     if (confirm('Are you sure you want to delete this chat?')) {
         delete allConversations[id];
         localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(allConversations));
         renderHistoryList();
-        if (currentConversationId === id) {
-            startNewChat();
-        }
+        if (currentConversationId === id) { startNewChat(); }
     }
 }
 
-// --- Initial Setup ---
-function initialize() {
-    // Event listeners for subject buttons
-    mathBtn.addEventListener('click', () => setSubjectPrompt('math'));
-    engBtn.addEventListener('click', () => setSubjectPrompt('english'));
-    banglaBtn.addEventListener('click', () => setSubjectPrompt('bangla'));
 
-    // Other listeners
-    menuToggleBtn.addEventListener('click', toggleMenu);
-    newChatBtn.addEventListener('click', startNewChat);
-    chatForm.addEventListener("submit", handleFormSubmit);
-    menuOverlay.addEventListener('click', toggleMenu);
+// --- Main Application Entry Point ---
 
-    if (window.innerWidth > 768) appLayout.classList.add('menu-open');
-    
-    loadAllConversations();
-    startNewChat();
+function main() {
+    loadTheme();
+    setupEventListeners();
+
+    const hasVisited = localStorage.getItem(VISITED_STORAGE_KEY);
+    if (hasVisited) {
+        landingPage.classList.add('hidden');
+        appLayout.style.display = 'flex';
+        runInitialAppLogic();
+        isAppInitialized = true;
+    } else {
+        document.body.classList.add('landing-page-active');
+    }
 }
 
 // Run the app
-initialize();
+main();
