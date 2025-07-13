@@ -9,17 +9,20 @@ const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-
 const HISTORY_STORAGE_KEY = 'pen-ai-academic-history';
 const THEME_STORAGE_KEY = 'pen-ai-theme';
 const VISITED_STORAGE_KEY = 'pen-ai-has-visited';
+const AD_MESSAGE_INTERVAL = 5; // Show ad every 5 messages
 
-// --- AI Persona (System Prompt) ---
+// --- AI Persona (System Prompt) - UPGRADED ---
 const systemInstruction = {
     role: 'user',
     parts: [{
-        text: `You are 'Pen AI', a friendly and encouraging academic assistant designed to help students. Your primary goal is to help students learn, not just give them the final answer.
-        - For math problems, you must always show the step-by-step solution and explain the core concepts and formulas used.
-        - For English questions, act as a language tutor. Correct grammar, explain vocabulary, suggest improvements for writing, and be encouraging.
-        - For Bangla questions, assist with translation, grammar, and understanding the language. When appropriate, use both Bangla script and romanized 'Banglish' to help the student learn.
-        - Always be patient and break down complex topics into simple, easy-to-understand parts. Your tone should be supportive and educational.
-        - Use Markdown for formatting, especially for code blocks, lists, and bolding key terms.`
+        text: `You are 'Pen AI', an exceptionally friendly, patient, and encouraging academic assistant for students.
+        - Your Primary Goal: Help students *understand* concepts, not just get answers. Always foster curiosity and confidence.
+        - Persona: You are supportive, like a friendly tutor. Use emojis to convey tone where appropriate (e.g., 👍, ✨, 🧠, 📚).
+        - Math: Always provide a full, step-by-step solution. Clearly label the steps. Explain the core formulas and concepts used in a simple way.
+        - English: Act as a language tutor. If a user makes a grammatical error, gently correct it, explain the rule, and provide a better alternative. Be encouraging.
+        - Bangla: Assist with translation, grammar, and understanding. Use both Bangla script and romanized 'Banglish' to aid learning.
+        - Image Analysis (Vision): If a user uploads an image, your primary task is to analyze it in an academic context. If it's a math problem, solve it. If it's a diagram, explain it. If it's a general photo, describe it in a helpful, educational manner.
+        - Formatting: Use Markdown extensively for clarity (bolding, lists, code blocks).`
     }]
 };
 
@@ -41,13 +44,24 @@ const menuOverlay = document.getElementById('menu-overlay');
 const themeToggleBtn = document.getElementById('theme-toggle-btn');
 const scrollToBottomBtn = document.getElementById('scroll-to-bottom-btn');
 const stopGeneratingBtn = document.getElementById('stop-generating-btn');
+const imageUploadInput = document.getElementById('image-upload-input');
+const imageUploadBtn = document.getElementById('image-upload-btn');
+const imagePreviewContainer = document.getElementById('image-preview-container');
+const imagePreview = document.getElementById('image-preview');
+const removeImageBtn = document.getElementById('remove-image-btn');
+const voiceInputBtn = document.getElementById('voice-input-btn');
+const adOverlay = document.getElementById('ad-overlay');
+const adCloseBtn = document.getElementById('ad-close-btn');
 
 // --- Application State ---
 let conversationHistory = [];
 let allConversations = {};
 let currentConversationId = null;
 let abortController = null;
-let isAppInitialized = false; // Prevents re-initializing the app logic
+let isAppInitialized = false;
+let attachedImage = null;
+let messageCounterForAd = 0;
+let recognition = null;
 
 // --- Icons ---
 const ICONS = {
@@ -57,9 +71,9 @@ const ICONS = {
     check: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.052-.143z" clip-rule="evenodd" /></svg>`
 };
 
+
 // --- Page Navigation & Setup ---
 
-/** Handles the parallax scroll effect on the landing page */
 function handleParallaxScroll() {
     const top = window.pageYOffset;
     parallaxShapes.forEach(shape => {
@@ -69,16 +83,13 @@ function handleParallaxScroll() {
     });
 }
 
-/** Transitions from the landing page to the main chat application */
 function enterApp() {
     localStorage.setItem(VISITED_STORAGE_KEY, 'true');
     document.body.classList.remove('landing-page-active');
-    
     landingPage.classList.add('fade-out');
     landingPage.addEventListener('transitionend', () => {
         landingPage.classList.add('hidden');
         appLayout.style.display = 'flex';
-        // Run the main app logic ONLY if it's the first time
         if (!isAppInitialized) {
             runInitialAppLogic();
             isAppInitialized = true;
@@ -86,15 +97,13 @@ function enterApp() {
     }, { once: true });
 }
 
-/** Transitions from the main chat app back to the landing page */
 function goToHome() {
     appLayout.style.display = 'none';
     landingPage.classList.remove('hidden', 'fade-out');
     document.body.classList.add('landing-page-active');
-    window.scrollTo(0, 0); // Reset scroll position
+    window.scrollTo(0, 0);
 }
 
-/** Runs the essential logic for the chat app to start. Only called once. */
 function runInitialAppLogic() {
     if (window.innerWidth > 768) {
         appLayout.classList.add('menu-open');
@@ -103,13 +112,9 @@ function runInitialAppLogic() {
     startNewChat();
 }
 
-/** Sets up ALL event listeners for the entire application, once. */
 function setupEventListeners() {
-    // Landing page listeners
     startAppBtn.addEventListener('click', enterApp);
     window.addEventListener('scroll', handleParallaxScroll);
-
-    // Main app listeners
     homeBtn.addEventListener('click', goToHome);
     goHomeLogoBtn.addEventListener('click', goToHome);
     menuToggleBtn.addEventListener('click', toggleMenu);
@@ -126,12 +131,76 @@ function setupEventListeners() {
             abortController.abort();
         }
     });
+    imageUploadBtn.addEventListener('click', () => imageUploadInput.click());
+    imageUploadInput.addEventListener('change', handleImageUpload);
+    removeImageBtn.addEventListener('click', removeImage);
+    voiceInputBtn.addEventListener('click', toggleVoiceInput);
+    adCloseBtn.addEventListener('click', () => adOverlay.classList.add('hidden'));
 }
 
+// --- Feature: Image Handling ---
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        attachedImage = {
+            mimeType: file.type,
+            base64: e.target.result.split(',')[1]
+        };
+        imagePreview.src = e.target.result;
+        imagePreviewContainer.classList.remove('hidden');
+        messageInput.focus();
+    };
+    reader.readAsDataURL(file);
+}
 
-// --- Main Application Functions (Unchanged from previous correct version) ---
-// Note: All functions from toggleMenu down to deleteConversation are correct and remain here.
+function removeImage() {
+    attachedImage = null;
+    imagePreview.src = '#';
+    imagePreviewContainer.classList.add('hidden');
+    imageUploadInput.value = '';
+}
 
+// --- Feature: Voice Input ---
+function setupSpeechRecognition() {
+    window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!window.SpeechRecognition) {
+        voiceInputBtn.disabled = true;
+        voiceInputBtn.title = "Voice recognition not supported by your browser.";
+        return;
+    }
+    recognition = new SpeechRecognition();
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.addEventListener('result', e => {
+        const transcript = Array.from(e.results).map(result => result[0]).map(result => result.transcript).join('');
+        messageInput.value = transcript;
+        handleAutoResize();
+    });
+    recognition.addEventListener('end', () => {
+        voiceInputBtn.classList.remove('is-listening');
+    });
+}
+
+function toggleVoiceInput() {
+    if (voiceInputBtn.classList.contains('is-listening')) {
+        recognition.stop();
+    } else {
+        recognition.start();
+        voiceInputBtn.classList.add('is-listening');
+    }
+}
+
+// --- Feature: Ad Simulation ---
+function showInterstitialAd() {
+    adOverlay.classList.remove('hidden');
+    setTimeout(() => {
+        adOverlay.classList.add('hidden');
+    }, 6000);
+}
+
+// --- Core Application Functions ---
 function toggleMenu() {
     const isMobile = window.innerWidth <= 768;
     appLayout.classList.toggle('menu-open');
@@ -141,7 +210,7 @@ function toggleMenu() {
 }
 
 function showWelcomeScreen() {
-    chatWindow.innerHTML = `<div class="welcome-container"> <h2 style="font-size: 2.5rem;">🖊️</h2> <h2>Welcome to Pen AI</h2> <p>Your friendly academic assistant. How can I help you learn today?</p> <div id="quick-start-buttons"> <button class="quick-start-btn" data-prompt="Solve this and show the steps: 2x + 5 = 15">🧮 Solve a Math Problem</button> <button class="quick-start-btn" data-prompt="Correct this sentence and explain the grammar: 'He go to school yesterday.'">✍️ Practice English</button> <button class="quick-start-btn" data-prompt="Translate to Bangla: 'I love learning new things.'">🇧🇩 Get Bangla Help</button> </div> </div>`;
+    chatWindow.innerHTML = `<div class="welcome-container"> <h2 style="font-size: 2.5rem;"></h2> <h2>Welcome to Pen AI</h2> <p>Your friendly academic assistant. How can I help you learn today?</p> <div id="quick-start-buttons"> <button class="quick-start-btn" data-prompt="Solve this and show the steps: 2x + 5 = 15">🧮 Solve a Math Problem</button> <button class="quick-start-btn" data-prompt="Correct this sentence and explain the grammar: 'He go to school yesterday.'">✍️ Practice English</button> <button class="quick-start-btn" data-prompt="Translate to Bangla: 'I love learning new things.'">🇧🇩 Get Bangla Help</button> </div> </div>`;
     document.querySelectorAll('.quick-start-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             messageInput.value = btn.dataset.prompt;
@@ -157,13 +226,14 @@ function startNewChat() {
     showWelcomeScreen();
     messageInput.value = '';
     messageInput.focus();
+    removeImage();
     handleAutoResize();
     if (window.innerWidth <= 768 && appLayout.classList.contains('menu-open')) {
         toggleMenu();
     }
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, imageUrl = null) {
     if (chatWindow.querySelector('.welcome-container')) {
         chatWindow.innerHTML = '';
     }
@@ -171,12 +241,18 @@ function addMessage(role, text) {
     messageContainer.classList.add("message", `${role}-message`);
     const messageHeader = document.createElement("strong");
     messageHeader.textContent = role === "user" ? "You" : "Pen AI";
+    messageContainer.appendChild(messageHeader);
+    if (imageUrl) {
+        const imgElement = document.createElement('img');
+        imgElement.src = imageUrl;
+        imgElement.className = 'message-image-preview';
+        messageContainer.appendChild(imgElement);
+    }
     const messageContent = document.createElement("div");
     messageContent.classList.add("message-content");
     if (text) {
         messageContent.innerHTML = DOMPurify.sanitize(marked.parse(text));
     }
-    messageContainer.appendChild(messageHeader);
     messageContainer.appendChild(messageContent);
     if (role === 'assistant' && text) {
         const copyBtn = document.createElement('button');
@@ -193,37 +269,58 @@ function addMessage(role, text) {
 
 async function handleFormSubmit(event) {
     event.preventDefault();
-    const userMessage = messageInput.value.trim();
-    if (!userMessage) return;
+    const userMessageText = messageInput.value.trim();
+    if (!userMessageText && !attachedImage) return;
+
     setFormState(true);
-    addMessage("user", userMessage);
-    conversationHistory.push({ role: "user", parts: [{ text: userMessage }] });
+    const userParts = [];
+    if (userMessageText) { userParts.push({ text: userMessageText }); }
+    if (attachedImage) { userParts.push({ inline_data: { mime_type: attachedImage.mimeType, data: attachedImage.base64 } }); }
+
+    addMessage("user", userMessageText, attachedImage ? imagePreview.src : null);
+    conversationHistory.push({ role: "user", parts: userParts });
+
     messageInput.value = "";
+    removeImage();
     handleAutoResize();
+    
     abortController = new AbortController();
     try {
         const assistantMessageContent = showTypingIndicator();
-        const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: conversationHistory }), signal: abortController.signal });
-        if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`); }
+        const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: conversationHistory }),
+            signal: abortController.signal
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
         assistantMessageContent.parentElement.remove();
         const assistantResponse = data.candidates[0].content.parts[0].text;
         conversationHistory.push({ role: "model", parts: [{ text: assistantResponse }] });
+        
         const newAssistantMessage = addMessage("assistant", "");
         await typeWriter(newAssistantMessage, assistantResponse);
-        // Add the copy button *after* the text is fully typed.
-        if (newAssistantMessage.parentElement) {
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'copy-btn';
-            copyBtn.title = 'Copy text';
-            copyBtn.innerHTML = ICONS.copy;
-            copyBtn.addEventListener('click', () => copyMessageToClipboard(copyBtn, assistantResponse));
-            newAssistantMessage.parentElement.appendChild(copyBtn);
-        }
         saveCurrentConversation();
+
+        messageCounterForAd++;
+        if (messageCounterForAd >= AD_MESSAGE_INTERVAL) {
+            showInterstitialAd();
+            messageCounterForAd = 0;
+        }
+
     } catch (error) {
-        if (error.name === 'AbortError') { addMessage("assistant", "Generation stopped."); }
-        else { console.error("Error:", error); addMessage("assistant", `Sorry, an error occurred: ${error.message}`); }
+        if (error.name === 'AbortError') {
+            addMessage("assistant", "Generation stopped.");
+        } else {
+            console.error("Error:", error);
+            addMessage("assistant", `Sorry, an error occurred: ${error.message}`);
+        }
     } finally {
         abortController = null;
         setFormState(false);
@@ -233,6 +330,8 @@ async function handleFormSubmit(event) {
 function setFormState(isLoading) {
     messageInput.disabled = isLoading;
     sendButton.disabled = isLoading;
+    imageUploadBtn.disabled = isLoading;
+    voiceInputBtn.disabled = isLoading;
     if (isLoading) {
         stopGeneratingBtn.classList.remove('hidden');
         sendButton.innerHTML = `<div class="typing-indicator" style="padding:0; height: 24px;"><span></span><span></span><span></span></div>`;
@@ -255,16 +354,15 @@ function showTypingIndicator() {
 
 function typeWriter(element, text) {
     return new Promise(resolve => {
-        let i = 0, currentText = '';
+        let i = 0;
         function type() {
-            if (i < text.length && abortController) { // Check if we should stop
-                currentText += text.charAt(i);
-                element.innerHTML = DOMPurify.sanitize(marked.parse(currentText));
+            if (i < text.length && abortController) {
+                element.innerHTML = DOMPurify.sanitize(marked.parse(text.substring(0, i + 1)));
                 scrollToBottom();
                 i++;
                 setTimeout(type, 10);
             } else {
-                element.innerHTML = DOMPurify.sanitize(marked.parse(text)); // Ensure full text is rendered
+                element.innerHTML = DOMPurify.sanitize(marked.parse(text));
                 scrollToBottom();
                 resolve();
             }
@@ -298,10 +396,10 @@ function loadConversation(id) {
 }
 
 function saveCurrentConversation() {
-    if (conversationHistory.length <= 2) return;
+    if (conversationHistory.length <= 1) return;
     if (!currentConversationId) { currentConversationId = `chat_${Date.now()}`; }
     const firstUserMessage = conversationHistory.find(m => m.role === 'user' && m.parts[0].text !== systemInstruction.parts[0].text);
-    const title = firstUserMessage ? firstUserMessage.parts[0].text.substring(0, 30) + (firstUserMessage.parts[0].text.length > 30 ? '...' : '') : 'New Chat';
+    const title = firstUserMessage ? (firstUserMessage.parts.find(p => p.text) || {text: 'Image Query'}).text.substring(0, 30) + '...' : 'New Chat';
     allConversations[currentConversationId] = { id: currentConversationId, title: title, history: conversationHistory };
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(allConversations));
     renderHistoryList();
@@ -331,13 +429,10 @@ function deleteConversation(id) {
     }
 }
 
-
-// --- Main Application Entry Point ---
-
 function main() {
     loadTheme();
     setupEventListeners();
-
+    setupSpeechRecognition();
     const hasVisited = localStorage.getItem(VISITED_STORAGE_KEY);
     if (hasVisited) {
         landingPage.classList.add('hidden');
@@ -349,5 +444,4 @@ function main() {
     }
 }
 
-// Run the app
 main();
